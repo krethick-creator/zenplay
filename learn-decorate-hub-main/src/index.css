@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    --background: 225 25% 8%;
+    --foreground: 220 20% 92%;
+
+    --card: 225 20% 12%;
+    --card-foreground: 220 20% 92%;
+
+    --popover: 225 20% 12%;
+    --popover-foreground: 220 20% 92%;
+
+    --primary: 175 70% 45%;
+    --primary-foreground: 225 25% 8%;
+
+    --secondary: 225 15% 18%;
+    --secondary-foreground: 220 20% 85%;
+
+    --muted: 225 15% 15%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 45 90% 55%;
+    --accent-foreground: 225 25% 8%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 220 20% 92%;
+
+    --border: 225 15% 20%;
+    --input: 225 15% 20%;
+    --ring: 175 70% 45%;
+
+    --radius: 0.75rem;
+
+    --coin: 45 90% 55%;
+    --coin-glow: 45 100% 65%;
+    --xp: 145 60% 45%;
+    --battle: 280 70% 55%;
+    
+    --gradient-primary: linear-gradient(135deg, hsl(175 70% 45%), hsl(200 80% 50%));
+    --gradient-gold: linear-gradient(135deg, hsl(40 90% 50%), hsl(50 95% 60%));
+    --gradient-battle: linear-gradient(135deg, hsl(280 70% 55%), hsl(320 70% 55%));
+    --gradient-card: linear-gradient(145deg, hsl(225 20% 14%), hsl(225 20% 10%));
+    
+    --shadow-glow: 0 0 20px hsl(175 70% 45% / 0.3);
+    --shadow-gold: 0 0 20px hsl(45 90% 55% / 0.3);
+    --shadow-card: 0 4px 24px hsl(0 0% 0% / 0.4);
+
+    --font-display: 'Orbitron', monospace;
+    --font-body: 'Inter', sans-serif;
+
+    --sidebar-background: 225 20% 10%;
+    --sidebar-foreground: 220 20% 85%;
+    --sidebar-primary: 175 70% 45%;
+    --sidebar-primary-foreground: 225 25% 8%;
+    --sidebar-accent: 225 15% 18%;
+    --sidebar-accent-foreground: 220 20% 85%;
+    --sidebar-border: 225 15% 20%;
+    --sidebar-ring: 175 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 10px hsl(175 70% 45% / 0.5);
+  }
+  
+  .text-glow-gold {
+    text-shadow: 0 0 10px hsl(45 90% 55% / 0.5);
+  }
+
+  .card-game {
+    background: var(--gradient-card);
+    border: 1px solid hsl(225 15% 22%);
+    box-shadow: var(--shadow-card);
+  }
+
+  .btn-game {
+    background: var(--gradient-primary);
+    box-shadow: var(--shadow-glow);
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .btn-gold {
+    background: var(--gradient-gold);
+    box-shadow: var(--shadow-gold);
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: hsl(225 25% 8%);
+  }
+
+  .glow-border {
+    border: 1px solid hsl(175 70% 45% / 0.4);
+    box-shadow: inset 0 0 20px hsl(175 70% 45% / 0.05), var(--shadow-glow);
+  }
+
+  .coin-badge {
+    background: var(--gradient-gold);
+    color: hsl(225 25% 8%);
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  .animate-coin-spin {
+    animation: coinSpin 1s ease-in-out;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 5px hsl(175 70% 45% / 0.3); }
+  50% { box-shadow: 0 0 25px hsl(175 70% 45% / 0.6); }
+}
+
+@keyframes coinSpin {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out forwards;
+}
