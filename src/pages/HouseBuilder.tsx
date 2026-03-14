@@ -10,8 +10,33 @@ import { Home, Trash2, Save, Minus, Plus } from 'lucide-react';
 import RoomBackground from '@/components/RoomBackground';
 
 const MIN_SCALE = 0.5;
-const MAX_SCALE = 3;
+const MAX_SCALE = 5;
 const SCALE_STEP = 0.25;
+
+const SCALE_STORAGE_KEY = 'learnquest_placement_scales';
+
+function getStoredScales(userId: string): Record<string, number> {
+  try {
+    const data = localStorage.getItem(SCALE_STORAGE_KEY);
+    if (!data) return {};
+    const byUser = JSON.parse(data) as Record<string, Record<string, number>>;
+    return byUser[userId] ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function setStoredScale(userId: string, placementKey: string, scale: number) {
+  try {
+    const data = localStorage.getItem(SCALE_STORAGE_KEY);
+    const byUser = data ? (JSON.parse(data) as Record<string, Record<string, number>>) : {};
+    if (!byUser[userId]) byUser[userId] = {};
+    byUser[userId][placementKey] = scale;
+    localStorage.setItem(SCALE_STORAGE_KEY, JSON.stringify(byUser));
+  } catch {
+    // ignore
+  }
+}
 
 interface Placement {
   id?: string;
@@ -44,6 +69,7 @@ const HouseBuilder = () => {
   const [localPlacements, setLocalPlacements] = useState<Placement[]>([]);
   const roomRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const prevPlacementsRef = useRef<Placement[]>([]);
 
   // Owned items with details
   const { data: ownedItems } = useQuery({
@@ -72,33 +98,70 @@ const HouseBuilder = () => {
   });
 
   useEffect(() => {
-    if (savedPlacements) {
-      setLocalPlacements(
-        savedPlacements.map(p => {
-          const rawScale = (p as any).scale;
-          const scale = typeof rawScale === 'number' && !Number.isNaN(rawScale)
-            ? Math.max(MIN_SCALE, Math.min(MAX_SCALE, rawScale))
-            : typeof rawScale === 'string'
-              ? Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(rawScale) || 1))
-              : 1;
-          return {
-            id: p.id,
-            item_id: p.item_id,
-            room: p.room,
-            x_pos: p.x_pos,
-            y_pos: p.y_pos,
-            rotation: p.rotation,
-            scale,
-            emoji: (p.shop_items as any)?.image_emoji ?? '🪑',
-            name: (p.shop_items as any)?.name ?? 'Item',
-          };
-        })
-      );
-    }
-  }, [savedPlacements]);
+    if (!savedPlacements || !user?.id) return;
+    const stored = getStoredScales(user.id);
+    const prev = prevPlacementsRef.current;
+    const byKey = (list: Placement[]) => {
+      const m: Record<string, Placement[]> = {};
+      list.forEach(pl => {
+        const k = `${pl.item_id}_${pl.room}`;
+        if (!m[k]) m[k] = [];
+        m[k].push(pl);
+      });
+      for (const k of Object.keys(m)) {
+        m[k].sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+      }
+      return m;
+    };
+    const prevByKey = byKey(prev);
+    let keyIndex: Record<string, number> = {};
+
+    const sortKey = (p: { room: string; item_id: string; id?: string }) =>
+      `${p.room}_${p.item_id}_${p.id || ''}`;
+    const sortedSaved = [...savedPlacements].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+
+    const next = sortedSaved.map(p => {
+      const rawScale = (p as any).scale;
+      const fromDb = typeof rawScale === 'number' && !Number.isNaN(rawScale)
+        ? Math.max(MIN_SCALE, Math.min(MAX_SCALE, rawScale))
+        : typeof rawScale === 'string'
+          ? Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(rawScale) || 1))
+          : null;
+      let scale = fromDb ?? (stored[p.id] != null ? Math.max(MIN_SCALE, Math.min(MAX_SCALE, stored[p.id])) : null);
+      if (scale == null && prev.length > 0) {
+        const k = `${p.item_id}_${p.room}`;
+        const idx = keyIndex[k] ?? 0;
+        keyIndex[k] = idx + 1;
+        const group = prevByKey[k] || [];
+        const prevP = group[idx];
+        if (prevP?.scale != null && prevP.scale !== 1) {
+          scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, prevP.scale));
+          setStoredScale(user.id, p.id, scale);
+        }
+      }
+      if (scale == null) scale = 1;
+      if (p.id) setStoredScale(user.id, p.id, scale);
+      return {
+        id: p.id,
+        item_id: p.item_id,
+        room: p.room,
+        x_pos: p.x_pos,
+        y_pos: p.y_pos,
+        rotation: p.rotation,
+        scale,
+        emoji: (p.shop_items as any)?.image_emoji ?? '🪑',
+        name: (p.shop_items as any)?.name ?? 'Item',
+      };
+    });
+    prevPlacementsRef.current = next;
+    setLocalPlacements(next);
+  }, [savedPlacements, user?.id]);
 
   const savePlacements = useMutation({
     mutationFn: async () => {
+      // Keep current state (including scale) so after refetch we merge it back – prevents size reset on Save
+      prevPlacementsRef.current = localPlacements.map(p => ({ ...p }));
+
       // Save entire house: delete all placements for this user, then insert all current placements (all rooms)
       await supabase
         .from('furniture_placements')
@@ -117,12 +180,10 @@ const HouseBuilder = () => {
         scale: p.scale ?? 1,
       }));
 
-      let usedScaleFallback = false;
       const { error } = await supabase.from('furniture_placements').insert(rows);
       if (error) {
-        // If scale column doesn't exist yet, retry without scale so chairs still persist
+        // Lovable/Supabase may not have scale column – retry without it so layout still saves
         if (error.message?.includes('scale') || error.code === '42703') {
-          usedScaleFallback = true;
           const { error: err2 } = await supabase.from('furniture_placements').insert(
             localPlacements.map(p => ({
               user_id: user!.id,
@@ -136,18 +197,10 @@ const HouseBuilder = () => {
           if (err2) throw err2;
         } else throw error;
       }
-      return { usedScaleFallback };
-    },
-    onSuccess: (data) => {
+      },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['placements'] });
-      if (data?.usedScaleFallback) {
-        toast({
-          title: '💾 Saved!',
-          description: 'Layout saved. Add the "scale" column in Supabase so item sizes persist when you leave the page.',
-        });
-      } else {
-        toast({ title: '💾 Saved!', description: 'Entire house layout saved.' });
-      }
+      toast({ title: '💾 Saved!', description: 'Entire house layout saved.' });
     },
   });
 
@@ -208,11 +261,18 @@ const HouseBuilder = () => {
   };
 
   const setScale = (globalIndex: number, delta: number) => {
-    setLocalPlacements(prev => prev.map((p, i) =>
-      i === globalIndex
-        ? { ...p, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, (p.scale ?? 1) + delta)) }
-        : p
-    ));
+    setLocalPlacements(prev => {
+      const next = prev.map((p, i) =>
+        i === globalIndex
+          ? { ...p, scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, (p.scale ?? 1) + delta)) }
+          : p
+      );
+      const updated = next[globalIndex];
+      if (updated?.id && user?.id) {
+        setStoredScale(user.id, updated.id, updated.scale);
+      }
+      return next;
+    });
   };
 
   const roomPlacements = localPlacements.filter(p => p.room === activeRoom);
